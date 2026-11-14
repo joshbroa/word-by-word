@@ -191,7 +191,7 @@ When reporting a bug, please include your operating system, Obsidian version, th
 
 ## Checklist: submitting to the community plugins directory
 
-For maintainers. Check the current [submission docs](https://docs.obsidian.md/Plugins/Releasing/Submit+your+plugin) first, in case the process has changed.
+For maintainers. Plugins are now submitted through the [Obsidian Community directory](https://community.obsidian.md), not by pull request. Check the current [submission docs](https://docs.obsidian.md/Plugins/Releasing/Submit+your+plugin) first, in case the process has changed again.
 
 - [ ] `npm run build`, `npm test` and `npm run lint` all pass.
 - [ ] `manifest.json` is correct: `id` is `word-by-word` (no "obsidian"), `version` matches the release, `minAppVersion` and `isDesktopOnly` are accurate, and the `description` starts with a verb and ends with a full stop.
@@ -199,16 +199,10 @@ For maintainers. Check the current [submission docs](https://docs.obsidian.md/Pl
 - [ ] `README.md` and `LICENSE` are in the repository root.
 - [ ] Create the release. For the **first release (0.1.0)**, the version is already set, so just tag it: `git tag 0.1.0` then `git push origin 0.1.0`. For later releases, run `npm version <x.y.z>` (no `v` prefix; it updates `manifest.json` and `versions.json`), then `git push --follow-tags`.
 - [ ] Check the draft release that the GitHub Action created. It must have `main.js`, `manifest.json` and `styles.css` attached as separate files, and its tag must exactly match the version. Then **publish** it.
-- [ ] Fork [obsidianmd/obsidian-releases](https://github.com/obsidianmd/obsidian-releases) and add this entry to the end of `community-plugins.json`:
-  ```json
-  {
-  	"id": "word-by-word",
-  	"name": "Word by Word",
-  	"author": "joshbroa",
-  	"description": "Read a note aloud one word at a time, advancing only when you press a key. Built for copying notes out by hand.",
-  	"repo": "joshbroa/word-by-word"
-  }
-  ```
-- [ ] Open a pull request titled "Add plugin: Word by Word", fill in the template and tick every item that applies.
-- [ ] Fix anything the automated review bot reports, push a new release if needed, and reply on the PR.
-- [ ] Wait for a human review, and answer any questions.
+- [ ] Sign in at the [Obsidian Community directory](https://community.obsidian.md) with an Obsidian account, and under **GitHub** select **Connect**. This gives the directory read-only access so it can check that you own the repository.
+- [ ] Go to **Plugins → New plugin**. Enter `https://github.com/joshbroa/word-by-word`, choose yourself as the owner and choose a payment category (Free). Agree to the developer policies and the support commitment, then select **Submit**. The directory reads `manifest.json` from the default branch.
+- [ ] Wait for the automated review (manifest, releases, source code and build verification). Fix any **Errors**, then publish a new release with a higher version. Use **Review branch** to check a fix before releasing.
+- [ ] Optionally, turn on **Action required notifications** on your Community profile.
+- [ ] Once it's listed, announce it in the forum's [Share & showcase](https://forum.obsidian.md/c/share-showcase/9) section.
+
+Later releases don't need resubmitting: publish a GitHub release, and the directory picks it up. You can also choose **… → Check for new releases** on the plugin's page.
