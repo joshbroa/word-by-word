@@ -14,7 +14,8 @@ It's useful any time you copy text by hand: journals, letters, lyrics, revision 
 ## Features
 
 - **Strictly one word per press.** Nothing is spoken until you ask for the next word. Pressing again mid-word cuts the old word off at once, so presses never queue up or overlap.
-- **Next, repeat, previous and spell.** Spelling reads the word letter by letter ("capital D, o, n, apostrophe, t") for tricky names and words.
+- **Simple keys while reading:** **→** next word, **←** previous word, **Space** repeat, **↓** spell, **Esc** stop. You can change them in the plugin's settings. Spelling reads the word letter by letter ("capital D, o, n, apostrophe, t") for tricky names and words.
+- **Click any word to jump to it**, in editing or reading view.
 - **Highlights the current word** in editing view (Source mode and Live Preview) and in reading view, and scrolls to keep it in sight.
 - **A small control bar** shows the word, your position (e.g. `42 / 310`) and buttons for each action. You can use it with a mouse, a touchscreen, a foot pedal or a clicker.
 - **Reads what you see, not the markdown.** Frontmatter, `#` heading marks, list markers, `**bold**` markers, link URLs, wikilink brackets, HTML comments and callout markers are all skipped. Links are read by their text, and wikilinks by their alias or note name.
@@ -45,11 +46,27 @@ It's useful any time you copy text by hand: journals, letters, lyrics, revision 
 ## How to use it
 
 1. Open a note.
-2. Run **Word by Word: Start from beginning** or **Word by Word: Start from cursor** from the command palette. If text is selected, only the selection is read.
-3. Press your **Next word** hotkey for each word. Use **Repeat**, **Previous** or **Spell** whenever you need them.
-4. Press **Stop and close** when you're done. Your place is saved; run **Resume where you left off** next time.
+2. Start reading. Use **Word by Word: Start from cursor** or **Start from beginning** from the command palette, or select the speaker icon in the left ribbon. If text is selected, only the selection is read.
+3. Press **→** for each word. Press **Space** to hear the word again, **←** to go back and **↓** to spell it out. Click any word in the note to continue from there.
+4. Press **Esc** (or **×** on the control bar) when you're done. Your place is saved; run **Resume where you left off** next time.
 
-If nothing is being read, **Next word** starts reading from the cursor. That means a single pedal or clicker button is enough to begin.
+### Keys while reading
+
+While the reader is running, these keys control it without any modifier keys:
+
+| Key | Action |
+| --- | --- |
+| **→** | Next word |
+| **←** | Previous word |
+| **Space** | Repeat current word |
+| **↓** | Spell current word |
+| **Esc** | Stop and close |
+
+Change them under **Settings → Word by Word → Keys while reading**: select a key's button, then press the new key. They only take over while the reader is running, and only in the note being read. In other notes, the note title, properties, search boxes, menus and dialogs (such as the command palette) they work normally. Holding a key down doesn't race through the note, and Shift+arrow still selects text. If you'd rather keep the keys normal, turn off **Use keys while reading** and use hotkeys instead.
+
+### Click to jump
+
+While reading, click or tap any word to make it the current word and hear it. It works in editing view (including inside callouts and tables in Live Preview) and in reading view. Clicking a link jumps to it instead of opening it. You can turn this off with **Click a word to jump to it**.
 
 ### Commands
 
@@ -65,9 +82,11 @@ If nothing is being read, **Next word** starts reading from the cursor. That mea
 | Pause or resume auto-advance | Only shown when auto-advance is turned on. |
 | Stop and close | Stop speaking, remove the highlight and close the control bar. |
 
-### Recommended hotkeys
+If nothing is being read, **Next word** (the command) starts reading from the cursor. That means a single pedal or clicker button bound to it is enough to begin.
 
-Word by Word sets **no default hotkeys**, so it never clashes with your existing shortcuts. Bind them in **Settings → Hotkeys** (search for "Word by Word"). The function keys are rarely used by Obsidian, so they're a good fit:
+### Hotkeys (optional)
+
+The keys above only work while reading. To start reading from the keyboard, or to control the reader with key combinations, give the commands hotkeys in **Settings → Hotkeys** (search for "Word by Word"). Word by Word sets **no default hotkeys**, so it never clashes with your existing shortcuts. The function keys are rarely used by Obsidian, so they're a good fit:
 
 | Command | Suggested key |
 | --- | --- |
@@ -84,8 +103,8 @@ Obsidian warns you in the Hotkeys screen if a key is already in use. On many lap
 
 Your hands are busy writing, so the best setup is often one you don't press with your hands:
 
-- **USB foot pedals** (the cheap one-, two- and three-pedal "programmable" pedals sold for transcription and gaming) can usually be set to send any key. Set one pedal to `F9` (Next word) and another to `F8` (Repeat).
-- **Bluetooth presentation clickers and page turners** usually send `Page Down`/`Page Up` or the arrow keys. You can bind those keys straight to **Next word** and **Previous word**. If you'd rather keep them for scrolling, remap the clicker to function keys with a tool such as AutoHotkey (Windows), Karabiner-Elements (macOS) or the clicker's own software.
+- **USB foot pedals** (the cheap one-, two- and three-pedal "programmable" pedals sold for transcription and gaming) can usually be set to send any key. The simplest setup is one pedal sending **→** (next) and another sending **Space** (repeat), which the reader understands out of the box. Alternatively, set a pedal to `F9` and bind it to the **Next word** command, so the same pedal also starts reading.
+- **Bluetooth presentation clickers and page turners** usually send the arrow keys or `Page Down`/`Page Up`. Arrow keys work straight away. For `Page Down`/`Page Up`, set them as the next and previous keys under **Keys while reading**.
 - Set pedals to send **one key press per press**, not a repeating key while held, or you'll skip several words at once.
 
 Hotkeys only work while the Obsidian window has focus, so click into Obsidian before you start.
@@ -100,7 +119,10 @@ Hotkeys only work while the Obsidian window has focus, so click into Obsidian be
 | Volume | 1 | Relative to your system volume. |
 | Speak punctuation | Off | Say punctuation and line breaks as their own steps: "comma", "full stop", "question mark", "open quote", "close bracket", "new line", "new paragraph" and so on. |
 | Skip code blocks | On | Leave out fenced code blocks. Turn off to read them word by word. |
+| Click a word to jump to it | On | While reading, click or tap a word to continue from it. Links jump instead of opening. |
 | Auto-advance (seconds) | 0 (off) | Speak the next word automatically this many seconds after the last one finishes. Leave at 0 to advance only when you ask. |
+| Use keys while reading | On | Let plain keys control the reader while it runs (see [Keys while reading](#keys-while-reading)). |
+| Next word / Previous word / Repeat / Spell / Stop | → / ← / Space / ↓ / Esc | The key for each action. Select the button and press a new key; **×** removes the key; the arrow restores the default. Each key can only do one thing. |
 | Highlight colour | Amber | Colour of the current-word highlight. |
 | Show control bar | On | Show the floating bar with the current word, position and buttons. |
 | Remember position in each note | On | Save the word you stopped on, per note, so you can resume. Positions follow renamed notes. |
@@ -146,7 +168,8 @@ Mobile hasn't been tested on real devices yet. Reports are very welcome; see [Co
 - **In reading view, selections aren't supported.** **Start from cursor** begins at the first visible line instead. To read a selection, switch to editing view.
 - **Embedded notes and images aren't read**, and neither is content generated by other plugins (such as Dataview queries) or inline maths.
 - **Older systems may not show the reading-view highlight.** That highlight uses the CSS Custom Highlight API, which needs a recent Obsidian (desktop) or iOS 17.2+. Without it, the word still shows in the control bar.
-- **Hotkeys only work while Obsidian has focus.**
+- **While reading, the reader keys don't type in the note being read.** Pressing Space or an arrow there controls the reader instead. Stop the reader (Esc) to edit the note, or edit another note.
+- **Keys and hotkeys only work while Obsidian has focus.**
 
 ## Privacy
 
@@ -174,7 +197,7 @@ For maintainers. Check the current [submission docs](https://docs.obsidian.md/Pl
 - [ ] `manifest.json` is correct: `id` is `word-by-word` (no "obsidian"), `version` matches the release, `minAppVersion` and `isDesktopOnly` are accurate, and the `description` starts with a verb and ends with a full stop.
 - [ ] `versions.json` maps the new version to `minAppVersion`.
 - [ ] `README.md` and `LICENSE` are in the repository root.
-- [ ] Create the release: run `npm version <x.y.z>` (no `v` prefix; it updates `manifest.json` and `versions.json`), then `git push --follow-tags`.
+- [ ] Create the release. For the **first release (0.1.0)**, the version is already set, so just tag it: `git tag 0.1.0` then `git push origin 0.1.0`. For later releases, run `npm version <x.y.z>` (no `v` prefix; it updates `manifest.json` and `versions.json`), then `git push --follow-tags`.
 - [ ] Check the draft release that the GitHub Action created. It must have `main.js`, `manifest.json` and `styles.css` attached as separate files, and its tag must exactly match the version. Then **publish** it.
 - [ ] Fork [obsidianmd/obsidian-releases](https://github.com/obsidianmd/obsidian-releases) and add this entry to the end of `community-plugins.json`:
   ```json

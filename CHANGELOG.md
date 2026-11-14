@@ -9,6 +9,8 @@ All notable changes to this project are documented here. The format is based on 
 ### Added
 
 - Read a note aloud one word at a time, advancing only on request.
+- Keys while reading: → next word, ← previous word, Space repeat, ↓ spell, Esc stop. They work only while the reader is running and only in the note being read, and can be changed in settings.
+- Click or tap any word in the note to jump the reader to it (editing and reading view). Links jump instead of opening.
 - Commands: start from beginning, start from cursor (reads only the selection if there is one), resume where you left off, next word, repeat current word, previous word, spell current word, pause or resume auto-advance, and stop and close. None has a default hotkey.
 - Current-word highlighting in editing view (CodeMirror 6 decorations, including inside Live Preview callouts and tables) and reading view (CSS Custom Highlight API), with auto-scroll.
 - Floating control bar with the current word, position and buttons for every action.

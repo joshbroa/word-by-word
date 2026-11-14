@@ -51,6 +51,8 @@ src/
   controller.ts        Runs a session: speech, highlighting, bar, positions
   session.ts           Pure: current position within the tokens
   tokenizer.ts         Pure: markdown masking, tokens and offsets, spelling
+  text-match.ts        Pure: matching words between source and rendered text
+  keys.ts              Pure: reader keys (→, ←, Space…) and their labels
   speech.ts            Web Speech API wrapper (cancel-on-press, voice choice)
   control-bar.ts       Floating control bar
   settings.ts          Settings types, defaults and data normalisation
@@ -83,6 +85,6 @@ This plugin follows Obsidian's [developer policies](https://docs.obsidian.md/Dev
 ## Releasing (maintainers)
 
 1. Move the **Unreleased** notes in `CHANGELOG.md` under a new version heading.
-2. Run `npm version <x.y.z>`. This updates `package.json`, `manifest.json` and `versions.json`, commits, and creates a tag with no `v` prefix.
-3. Run `git push --follow-tags`. The release workflow builds the plugin and creates a **draft** GitHub release with `main.js`, `manifest.json` and `styles.css` attached.
+2. Run `npm version <x.y.z>`. This updates `package.json`, `manifest.json` and `versions.json`, commits, and creates a tag with no `v` prefix. (`npm version` refuses to "change" to the version that's already set. For the very first release, 0.1.0, skip this step and run `git tag 0.1.0` instead.)
+3. Run `git push --follow-tags` (or `git push origin 0.1.0` for the first release). The release workflow builds the plugin and creates a **draft** GitHub release with `main.js`, `manifest.json` and `styles.css` attached.
 4. Review the draft, paste in the changelog notes, and publish it.
