@@ -1,0 +1,44 @@
+{
+	"name": "word-by-word",
+	"version": "0.1.0",
+	"description": "Read a note aloud one word at a time, advancing only when you press a key. Built for transcribing notes by hand.",
+	"main": "main.js",
+	"type": "module",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"lint": "eslint .",
+		"version": "node version-bump.mjs && git add manifest.json versions.json"
+	},
+	"keywords": [
+		"obsidian",
+		"obsidian-plugin",
+		"text-to-speech",
+		"dictation",
+		"transcription",
+		"accessibility"
+	],
+	"author": "joshbroa",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/joshbroa/word-by-word.git"
+	},
+	"devDependencies": {
+		"@codemirror/state": "^6.5.0",
+		"@codemirror/view": "^6.38.0",
+		"@eslint/js": "^9.39.4",
+		"@types/node": "^22.15.17",
+		"esbuild": "^0.28.2",
+		"eslint": "^9.39.4",
+		"eslint-plugin-obsidianmd": "^0.4.0",
+		"globals": "^17.6.0",
+		"jiti": "^2.6.1",
+		"obsidian": "latest",
+		"typescript": "^5.8.3",
+		"typescript-eslint": "^8.59.1",
+		"vitest": "^5.1.0"
+	}
+}

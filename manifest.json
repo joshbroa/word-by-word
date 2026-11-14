@@ -1,0 +1,10 @@
+{
+	"id": "word-by-word",
+	"name": "Word by Word",
+	"version": "0.1.0",
+	"minAppVersion": "1.5.0",
+	"description": "Read a note aloud one word at a time, advancing only when you press a key. Built for copying notes out by hand.",
+	"author": "joshbroa",
+	"authorUrl": "https://github.com/joshbroa",
+	"isDesktopOnly": false
+}
