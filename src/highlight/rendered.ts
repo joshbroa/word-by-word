@@ -1,5 +1,6 @@
 import type { EditorView } from '@codemirror/view';
 import type { MarkdownPostProcessorContext, MarkdownView } from 'obsidian';
+import { coreOf, findOccurrences, sourceOffsetForRenderedIndex, visibleText } from '../text-match';
 import { maskMarkdown, type Token, type TokenizeOptions } from '../tokenizer';
 
 /** Name used with `CSS.highlights`; styled by `::highlight(word-by-word-current)`. */
@@ -105,6 +106,52 @@ export class RenderedHighlighter {
 		return null;
 	}
 
+	/**
+	 * The note offset of the word at screen point (x, y), when `target` is
+	 * inside a rendered section of reading-view `view`. Null if no word is there.
+	 */
+	offsetAtPointInReadingView(
+		view: MarkdownView,
+		target: Element,
+		x: number,
+		y: number,
+		source: string,
+		options: TokenizeOptions,
+	): number | null {
+		const section = target.closest<HTMLElement>('.markdown-preview-section > div');
+		if (!section || !view.previewMode.containerEl.contains(section)) return null;
+		const info = this.contexts.get(section)?.getSectionInfo(section);
+		if (!info) return null;
+		const from = offsetOfLine(source, info.lineStart);
+		const to = offsetOfLine(source, info.lineEnd + 1);
+		return this.offsetAtPoint(section, source, from, to, x, y, options);
+	}
+
+	/**
+	 * The note offset of the word at screen point (x, y), when `target` is
+	 * inside a block that Live Preview renders as a widget (callout, table).
+	 */
+	offsetAtPointInEditorWidget(
+		cm: EditorView,
+		target: Element,
+		x: number,
+		y: number,
+		options: TokenizeOptions,
+	): number | null {
+		const widget = target.closest<HTMLElement>('.cm-embed-block');
+		if (!widget || !cm.contentDOM.contains(widget)) return null;
+		let from: number;
+		let to: number;
+		try {
+			from = cm.posAtDOM(widget);
+			const next = widget.nextElementSibling;
+			to = next ? cm.posAtDOM(next) : cm.state.doc.length;
+		} catch {
+			return null;
+		}
+		return this.offsetAtPoint(widget, cm.state.doc.toString(), from, to, x, y, options);
+	}
+
 	/** Show exactly these ranges, replacing any previous highlight in every window. */
 	apply(ranges: readonly Range[]): void {
 		const byWindow = new Map<Window, Range[]>();
@@ -155,12 +202,8 @@ export class RenderedHighlighter {
 		if (!needle) return null;
 
 		// How many times does the word appear earlier in this block's visible text?
-		const hidden = this.mask(source, options);
-		const visibleBefore: string[] = [];
-		for (let i = blockStart; i < word.start && i < source.length; i++) {
-			if (hidden[i] !== 1) visibleBefore.push(source[i] ?? '');
-		}
-		const occurrence = findOccurrences(visibleBefore.join(''), needle).length;
+		const before = visibleText(source, this.mask(source, options), blockStart, word.start);
+		const occurrence = findOccurrences(before.text, needle).length;
 
 		// Pick the same occurrence in the rendered text.
 		const { text, nodes } = collectText(el, options.skipCodeBlocks);
@@ -176,6 +219,22 @@ export class RenderedHighlighter {
 		return range;
 	}
 
+	private offsetAtPoint(
+		el: HTMLElement,
+		source: string,
+		from: number,
+		to: number,
+		x: number,
+		y: number,
+		options: TokenizeOptions,
+	): number | null {
+		const { text, nodes } = collectText(el, options.skipCodeBlocks);
+		const index = indexAtPoint(nodes, x, y);
+		if (index === null) return null;
+		const visible = visibleText(source, this.mask(source, options), from, to);
+		return sourceOffsetForRenderedIndex(text, index, visible);
+	}
+
 	private mask(source: string, options: TokenizeOptions): Uint8Array {
 		const cache = this.maskCache;
 		if (cache && cache.source === source && cache.skipCodeBlocks === options.skipCodeBlocks) {
@@ -189,28 +248,6 @@ export class RenderedHighlighter {
 
 function highlightRegistry(win: Window): HighlightRegistry | null {
 	return (win as HighlightWindow).CSS?.highlights ?? null;
-}
-
-/** The word without leading and trailing punctuation, e.g. `"Hello,` → `Hello`. */
-function coreOf(display: string): string {
-	return display.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '') || display;
-}
-
-const isWordChar = (ch: string | undefined): boolean => ch !== undefined && /[\p{L}\p{N}]/u.test(ch);
-
-/** Start indices of whole-word occurrences of `needle` in `haystack`. */
-function findOccurrences(haystack: string, needle: string): number[] {
-	const out: number[] = [];
-	const checkStart = isWordChar(needle[0]);
-	const checkEnd = isWordChar(needle[needle.length - 1]);
-	let i = haystack.indexOf(needle);
-	while (i >= 0) {
-		const okStart = !checkStart || !isWordChar(haystack[i - 1]);
-		const okEnd = !checkEnd || !isWordChar(haystack[i + needle.length]);
-		if (okStart && okEnd) out.push(i);
-		i = haystack.indexOf(needle, i + 1);
-	}
-	return out;
 }
 
 interface TextNodeSpan {
@@ -234,6 +271,30 @@ function collectText(root: HTMLElement, skipCode: boolean): { text: string; node
 		length += n.data.length;
 	}
 	return { text: parts.join(''), nodes };
+}
+
+/**
+ * Index (into the concatenated text) of the word drawn at screen point (x, y).
+ * Hit-tests each word's rectangles, which works on every platform, unlike the
+ * caret-from-point APIs.
+ */
+function indexAtPoint(nodes: TextNodeSpan[], x: number, y: number): number | null {
+	const slop = 2;
+	for (const span of nodes) {
+		const re = /\S+/g;
+		let m: RegExpExecArray | null;
+		while ((m = re.exec(span.node.data))) {
+			const range = span.node.doc.createRange();
+			range.setStart(span.node, m.index);
+			range.setEnd(span.node, m.index + m[0].length);
+			for (const r of Array.from(range.getClientRects())) {
+				if (x >= r.left - slop && x <= r.right + slop && y >= r.top - slop && y <= r.bottom + slop) {
+					return span.start + m.index;
+				}
+			}
+		}
+	}
+	return null;
 }
 
 /** Map an index into the concatenated text back to a text node and offset. */

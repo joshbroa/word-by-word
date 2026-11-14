@@ -50,6 +50,14 @@ describe('ReadingSession', () => {
 		expect(s?.positionLabel).toBe('3 / 4');
 	});
 
+	it('jumps to the word at an offset', () => {
+		const text = 'one two three four';
+		const s = ReadingSession.create('a.md', text, opts, null);
+		expect(s?.jumpTo(text.indexOf('hree'))?.display).toBe('three');
+		expect(s?.positionLabel).toBe('3 / 4');
+		expect(s?.jumpTo(0)?.display).toBe('one');
+	});
+
 	it('finds the nearest word for a punctuation step', () => {
 		const s = ReadingSession.create('a.md', 'Hi, you', { ...opts, speakPunctuation: true }, null);
 		s?.next(); // ","

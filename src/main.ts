@@ -46,6 +46,16 @@ export default class WordByWordPlugin extends Plugin implements ControllerHost {
 			if (view?.file) this.controller.start(view, 'cursor');
 		});
 
+		// Reader keys and click-to-jump. Capture phase, so they run before the
+		// editor sees the event; they do nothing unless a session is running.
+		const listen = (win: Window): void => {
+			this.registerDomEvent(win, 'keydown', (evt) => this.controller.handleKeydown(evt), { capture: true });
+			this.registerDomEvent(win, 'mousedown', (evt) => this.controller.handleMouseDown(evt), { capture: true });
+			this.registerDomEvent(win, 'click', (evt) => this.controller.handleClick(evt), { capture: true });
+		};
+		listen(window);
+		this.registerEvent(this.app.workspace.on('window-open', (_workspaceWindow, win) => listen(win)));
+
 		this.registerEvent(this.app.workspace.on('layout-change', () => this.controller.onLayoutChange()));
 		this.registerEvent(this.app.workspace.on('active-leaf-change', () => this.controller.onLayoutChange()));
 		this.registerEvent(

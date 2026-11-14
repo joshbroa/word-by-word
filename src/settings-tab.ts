@@ -1,11 +1,22 @@
 import {
+	Notice,
 	PluginSettingTab,
 	requireApiVersion,
 	Setting,
 	type App,
+	type ButtonComponent,
 	type SettingDefinitionItem,
 	type SliderComponent,
 } from 'obsidian';
+import {
+	ACTION_LABELS,
+	assignKey,
+	DEFAULT_READER_KEYS,
+	isModifierKey,
+	keyLabel,
+	READER_ACTIONS,
+	type ReaderAction,
+} from './keys';
 import type WordByWordPlugin from './main';
 import { DEFAULT_SETTINGS, type WordByWordSettings } from './settings';
 
@@ -31,6 +42,9 @@ type NumericKey = 'rate' | 'pitch' | 'volume' | 'autoAdvanceSeconds';
  * search); on older versions `display()` renders the same rows.
  */
 export class WordByWordSettingTab extends PluginSettingTab {
+	/** Stops listening for a key press, if a key is being changed. */
+	private cancelKeyCapture: (() => void) | null = null;
+
 	constructor(
 		app: App,
 		private readonly plugin: WordByWordPlugin,
@@ -50,6 +64,11 @@ export class WordByWordSettingTab extends PluginSettingTab {
 				render: (setting: Setting) => row.render(setting),
 			})),
 		}));
+	}
+
+	hide(): void {
+		this.cancelKeyCapture?.();
+		super.hide();
 	}
 
 	/** Fallback for Obsidian versions before 1.13, which do not use definitions. */
@@ -81,6 +100,7 @@ export class WordByWordSettingTab extends PluginSettingTab {
 		return [
 			{ heading: 'Voice', rows: this.voiceRows() },
 			{ heading: 'Reading', rows: this.readingRows() },
+			{ heading: 'Keys while reading', rows: this.keyRows() },
 			{ heading: 'Display', rows: this.displayRows() },
 			{ heading: 'Saved positions', rows: this.positionRows() },
 		];
@@ -163,6 +183,18 @@ export class WordByWordSettingTab extends PluginSettingTab {
 					);
 				},
 			},
+			{
+				name: 'Click a word to jump to it',
+				desc: 'While reading, click or tap any word in the note to continue from there. Links jump instead of opening.',
+				render: (setting) => {
+					setting.addToggle((toggle) =>
+						toggle.setValue(this.settings.clickToJump).onChange(async (value) => {
+							this.settings.clickToJump = value;
+							await this.plugin.saveSettings();
+						}),
+					);
+				},
+			},
 			this.sliderRow(
 				'Auto-advance (seconds)',
 				'Speak the next word automatically this many seconds after the last one. 0 turns it off, so words only advance when you ask.',
@@ -172,6 +204,96 @@ export class WordByWordSettingTab extends PluginSettingTab {
 				0.5,
 			),
 		];
+	}
+
+	private keyRows(): Row[] {
+		const enabled = this.settings.readerKeysEnabled;
+		const rows: Row[] = [
+			{
+				name: 'Use keys while reading',
+				desc: 'While the reader is running, these keys control it on their own, without Ctrl or Cmd. They type normally again once you stop, and always in other notes, text fields and dialogs. You can also give any command a hotkey in Settings → Hotkeys.',
+				render: (setting) => {
+					setting.addToggle((toggle) =>
+						toggle.setValue(enabled).onChange(async (value) => {
+							this.settings.readerKeysEnabled = value;
+							await this.plugin.saveSettings();
+							this.refresh();
+						}),
+					);
+				},
+			},
+		];
+		for (const action of READER_ACTIONS) {
+			rows.push({
+				name: ACTION_LABELS[action],
+				desc: '',
+				render: (setting) => {
+					setting.addButton((button) => {
+						button
+							.setButtonText(keyLabel(this.settings.readerKeys[action]))
+							.setTooltip('Change key')
+							.setDisabled(!enabled)
+							.onClick(() => this.captureKey(button, action));
+					});
+					setting.addExtraButton((button) =>
+						button
+							.setIcon('x')
+							.setTooltip('No key')
+							.setDisabled(!enabled)
+							.onClick(async () => {
+								this.settings.readerKeys = assignKey(this.settings.readerKeys, action, '');
+								await this.plugin.saveSettings();
+								this.refresh();
+							}),
+					);
+					setting.addExtraButton((button) =>
+						button
+							.setIcon('rotate-ccw')
+							.setTooltip(`Restore default (${keyLabel(DEFAULT_READER_KEYS[action])})`)
+							.setDisabled(!enabled)
+							.onClick(async () => {
+								this.settings.readerKeys = assignKey(this.settings.readerKeys, action, DEFAULT_READER_KEYS[action]);
+								await this.plugin.saveSettings();
+								this.refresh();
+							}),
+					);
+				},
+			});
+		}
+		return rows;
+	}
+
+	/** Wait for the next key press and bind it to `action`. Clicking anywhere cancels. */
+	private captureKey(button: ButtonComponent, action: ReaderAction): void {
+		this.cancelKeyCapture?.();
+		const doc = button.buttonEl.doc;
+		button.setButtonText('Press a key…');
+
+		const stop = (): void => {
+			doc.removeEventListener('keydown', onKey, true);
+			doc.removeEventListener('mousedown', onCancel, true);
+			this.cancelKeyCapture = null;
+		};
+		const onCancel = (): void => {
+			stop();
+			button.setButtonText(keyLabel(this.settings.readerKeys[action]));
+		};
+		const onKey = (evt: KeyboardEvent): void => {
+			if (isModifierKey(evt.key)) return; // Wait for the actual key.
+			evt.preventDefault();
+			evt.stopPropagation();
+			stop();
+			if (evt.ctrlKey || evt.metaKey || evt.altKey || evt.shiftKey) {
+				new Notice('Choose a single key without any modifier keys. For key combinations, use the hotkeys settings.');
+				button.setButtonText(keyLabel(this.settings.readerKeys[action]));
+				return;
+			}
+			this.settings.readerKeys = assignKey(this.settings.readerKeys, action, evt.key);
+			void this.plugin.saveSettings().then(() => this.refresh());
+		};
+		doc.addEventListener('keydown', onKey, true);
+		doc.addEventListener('mousedown', onCancel, true);
+		this.cancelKeyCapture = onCancel;
 	}
 
 	private displayRows(): Row[] {

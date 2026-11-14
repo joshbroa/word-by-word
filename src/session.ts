@@ -93,6 +93,16 @@ export class ReadingSession {
 	}
 
 	/**
+	 * Jump to the token at (or just after) `offset` in the note, e.g. after the
+	 * reader clicks a word. Offsets outside a selection clamp to its ends.
+	 */
+	jumpTo(offset: number): Token | undefined {
+		const index = findTokenIndexAtOffset(this._tokens, offset);
+		if (index >= 0) this._index = index;
+		return this.current;
+	}
+
+	/**
 	 * Re-tokenise after the note changed. `anchorOffset` is where the current
 	 * token now starts (after mapping through the edit), and `scope` is the
 	 * mapped selection, if any.

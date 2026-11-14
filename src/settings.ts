@@ -1,3 +1,4 @@
+import { DEFAULT_READER_KEYS, READER_ACTIONS, type ReaderKeys } from './keys';
 import type { VoiceSettings } from './speech';
 import type { TokenizeOptions } from './tokenizer';
 
@@ -9,6 +10,11 @@ export interface WordByWordSettings extends VoiceSettings, TokenizeOptions {
 	rememberPosition: boolean;
 	/** Speak the next word automatically after this many seconds. 0 = off. */
 	autoAdvanceSeconds: number;
+	/** Use plain keys (arrows, space…) to control the reader while it is running. */
+	readerKeysEnabled: boolean;
+	readerKeys: ReaderKeys;
+	/** Click a word in the note to jump the reader to it. */
+	clickToJump: boolean;
 }
 
 export const DEFAULT_SETTINGS: WordByWordSettings = {
@@ -22,6 +28,9 @@ export const DEFAULT_SETTINGS: WordByWordSettings = {
 	showControlBar: true,
 	rememberPosition: true,
 	autoAdvanceSeconds: 0,
+	readerKeysEnabled: true,
+	readerKeys: { ...DEFAULT_READER_KEYS },
+	clickToJump: true,
 };
 
 export interface SavedPosition {
@@ -44,11 +53,19 @@ export interface PluginData {
 export function normalizeData(raw: unknown): PluginData {
 	const data = isRecord(raw) ? raw : {};
 	const storedSettings = isRecord(data.settings) ? data.settings : {};
-	const settings: WordByWordSettings = { ...DEFAULT_SETTINGS };
+	const settings: WordByWordSettings = { ...DEFAULT_SETTINGS, readerKeys: { ...DEFAULT_READER_KEYS } };
 	for (const key of Object.keys(DEFAULT_SETTINGS) as (keyof WordByWordSettings)[]) {
+		if (key === 'readerKeys') continue;
 		const value = storedSettings[key];
 		if (typeof value === typeof DEFAULT_SETTINGS[key]) {
 			(settings as unknown as Record<string, unknown>)[key] = value;
+		}
+	}
+	const storedKeys = storedSettings.readerKeys;
+	if (isRecord(storedKeys)) {
+		for (const action of READER_ACTIONS) {
+			const value = storedKeys[action];
+			if (typeof value === 'string') settings.readerKeys[action] = value;
 		}
 	}
 	const positions: Record<string, SavedPosition> = {};

@@ -1,4 +1,5 @@
 import { setIcon, setTooltip, type IconName } from 'obsidian';
+import type { ReaderAction } from './keys';
 
 export interface ControlBarActions {
 	previous(): void;
@@ -35,6 +36,8 @@ export class ControlBar {
 	private positionEl: HTMLElement | null = null;
 	private autoButton: HTMLButtonElement | null = null;
 	private body: HTMLElement | null = null;
+	/** Buttons for actions that can have a reader key, with their base labels. */
+	private readonly actionButtons = new Map<ReaderAction, { el: HTMLButtonElement; label: string }>();
 
 	constructor(private readonly actions: ControlBarActions) {}
 
@@ -55,12 +58,12 @@ export class ControlBar {
 		this.positionEl = readout.createDiv({ cls: 'word-by-word-position' });
 
 		const buttons = root.createDiv({ cls: 'word-by-word-buttons' });
-		this.button(buttons, 'skip-back', 'Previous word', () => this.actions.previous());
-		this.button(buttons, 'rotate-ccw', 'Repeat word', () => this.actions.repeat());
-		this.button(buttons, 'skip-forward', 'Next word', () => this.actions.next(), 'word-by-word-next');
-		this.button(buttons, 'spell-check', 'Spell word', () => this.actions.spell());
+		this.actionButton(buttons, 'previous', 'skip-back', 'Previous word', () => this.actions.previous());
+		this.actionButton(buttons, 'repeat', 'rotate-ccw', 'Repeat word', () => this.actions.repeat());
+		this.actionButton(buttons, 'next', 'skip-forward', 'Next word', () => this.actions.next(), 'word-by-word-next');
+		this.actionButton(buttons, 'spell', 'spell-check', 'Spell word', () => this.actions.spell());
 		this.autoButton = this.button(buttons, 'pause', 'Pause auto-advance', () => this.actions.toggleAutoAdvance());
-		this.button(buttons, 'x', 'Stop', () => this.actions.stop());
+		this.actionButton(buttons, 'stop', 'x', 'Stop', () => this.actions.stop());
 		this.root = root;
 		// Lets the stylesheet add room at the bottom of notes so the bar never covers the last lines.
 		this.body = doc.body;
@@ -82,6 +85,16 @@ export class ControlBar {
 		}
 	}
 
+	/** Show each action's reader key in its tooltip, e.g. "Next word (→)". */
+	setKeyHints(hints: Partial<Record<ReaderAction, string>>): void {
+		for (const [action, { el, label }] of this.actionButtons) {
+			const hint = hints[action];
+			const text = hint ? `${label} (${hint})` : label;
+			el.setAttr('aria-label', text);
+			setTooltip(el, text);
+		}
+	}
+
 	hide(): void {
 		this.root?.remove();
 		this.body?.removeClass(BODY_CLASS);
@@ -90,6 +103,18 @@ export class ControlBar {
 		this.wordEl = null;
 		this.positionEl = null;
 		this.autoButton = null;
+		this.actionButtons.clear();
+	}
+
+	private actionButton(
+		parent: HTMLElement,
+		action: ReaderAction,
+		icon: IconName,
+		label: string,
+		onClick: () => void,
+		extraClass?: string,
+	): void {
+		this.actionButtons.set(action, { el: this.button(parent, icon, label, onClick, extraClass), label });
 	}
 
 	private button(

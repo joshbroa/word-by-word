@@ -2,12 +2,23 @@ import type { Extension } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 import { MarkdownView, Notice, TFile, type App, type MarkdownPostProcessor } from 'obsidian';
 import { ControlBar, type AutoAdvanceState } from './control-bar';
+import { actionForKey, keyLabel, READER_ACTIONS, type ReaderAction } from './keys';
 import { EditorHighlighter, HIGHLIGHT_CLASS, type Span } from './highlight/editor';
 import { offsetOfLine, RenderedHighlighter } from './highlight/rendered';
 import { ReadingSession } from './session';
 import type { SavedPosition, WordByWordSettings } from './settings';
 import type { SpeechEngine } from './speech';
-import { spellOut, type TextRange, type Token } from './tokenizer';
+import { findTokenIndexAtOffset, spellOut, type TextRange, type Token } from './tokenizer';
+
+/** Clicking these opens something (a note, a URL, a tag search); while reading, it jumps instead. */
+const LINK_SELECTOR = 'a, .cm-hmd-internal-link, .cm-link, .cm-url, .internal-link, .external-link, .tag, .cm-hashtag';
+
+/** Clicking these should behave normally and never move the reader. */
+const NO_JUMP_SELECTOR =
+	'input, button, select, textarea, .metadata-container, .inline-title, .collapse-indicator, .callout-fold, .edit-block-button, .cm-gutters';
+
+/** Pop-ups that use the arrow keys and Escape themselves. */
+const KEY_CONSUMER_SELECTOR = '.modal-container, .menu, .suggestion-container, .prompt';
 
 /** What the controller needs from the plugin. */
 export interface ControllerHost {
@@ -30,6 +41,8 @@ export class WordByWordController {
 	private autoTimer: number | null = null;
 	private autoPaused = false;
 	private renderQueued = false;
+	/** Word under the pointer at mousedown, used if the press turns out to be a click. */
+	private pendingClick: { offset: number; x: number; y: number } | null = null;
 	private retokenizeTimer: number | null = null;
 
 	private readonly editorHighlighter: EditorHighlighter;
@@ -117,7 +130,7 @@ export class WordByWordController {
 		this.stop();
 		this.session = session;
 		this.autoPaused = false;
-		if (this.host.settings.showControlBar) this.controlBar.show(view.containerEl.doc);
+		if (this.host.settings.showControlBar) this.showControlBar(view.containerEl.doc);
 		this.speakCurrent();
 	}
 
@@ -182,6 +195,143 @@ export class WordByWordController {
 		this.controlBar.hide();
 	}
 
+	/** Move the reader to the word at `offset` in the note and speak it. */
+	jumpTo(offset: number): void {
+		const s = this.prepare();
+		if (!s) return;
+		const token = s.tokens[findTokenIndexAtOffset(s.tokens, offset)];
+		// Only jump when the offset is actually on a word (not on hidden markup or outside a selection).
+		if (!token || offset < token.start || offset > token.end) return;
+		s.jumpTo(offset);
+		this.speakCurrent();
+	}
+
+	// -----------------------------------------------------------------------
+	// Reader keys and click-to-jump (window-level listeners, capture phase)
+	// -----------------------------------------------------------------------
+
+	/** Plain keys such as → and Space control the reader while it runs. */
+	handleKeydown(evt: KeyboardEvent): void {
+		const s = this.session;
+		const settings = this.host.settings;
+		if (!s || !settings.readerKeysEnabled) return;
+		if (evt.ctrlKey || evt.metaKey || evt.altKey || evt.shiftKey || evt.isComposing) return;
+		const action = actionForKey(settings.readerKeys, evt.key);
+		if (!action || !this.readerKeysApplyTo(evt, s)) return;
+		evt.preventDefault();
+		evt.stopPropagation();
+		// Holding a key down must not race through the note.
+		if (evt.repeat) return;
+		this.runAction(action);
+	}
+
+	/** Note which word is under the pointer before Live Preview can shift the text. */
+	handleMouseDown(evt: MouseEvent): void {
+		this.pendingClick = null;
+		const hit = this.clickTarget(evt);
+		if (!hit) return;
+		if (hit.el.closest(LINK_SELECTOR)) {
+			// Jump to the link's text instead of opening it.
+			evt.preventDefault();
+			evt.stopPropagation();
+		}
+		const offset = this.offsetAtPoint(hit.view, hit.el, evt.clientX, evt.clientY);
+		if (offset !== null) this.pendingClick = { offset, x: evt.clientX, y: evt.clientY };
+	}
+
+	/** A click (not a drag to select text) on a word jumps the reader to it. */
+	handleClick(evt: MouseEvent): void {
+		const pending = this.pendingClick;
+		this.pendingClick = null;
+		const hit = this.clickTarget(evt);
+		if (!hit) return;
+		if (hit.el.closest(LINK_SELECTOR)) {
+			evt.preventDefault();
+			evt.stopPropagation();
+		}
+		// Ignore drags (e.g. selecting text): the pointer must not have moved.
+		// Don't test the selection instead: Live Preview selects a whole
+		// callout when it is clicked.
+		if (!pending || Math.abs(pending.x - evt.clientX) > 4 || Math.abs(pending.y - evt.clientY) > 4) return;
+		this.jumpTo(pending.offset);
+	}
+
+	private readerKeysApplyTo(evt: KeyboardEvent, s: ReadingSession): boolean {
+		if (evt.doc.querySelector(KEY_CONSUMER_SELECTOR)) return false;
+		const node = evt.targetNode;
+		const el = node?.instanceOf(HTMLElement) ? node : (node?.parentElement ?? null);
+		if (!el) return true;
+		if (el.closest('input, textarea, select')) return false;
+		const editor = el.closest('.cm-content');
+		if (editor) {
+			// In the note being read the keys control the reader; in other notes they type normally.
+			return this.editorHighlighter.viewsFor(s.filePath).some((cm) => cm.contentDOM === editor);
+		}
+		// The note title, property values and other editable fields keep their keys.
+		return !el.isContentEditable;
+	}
+
+	private runAction(action: ReaderAction): void {
+		switch (action) {
+			case 'next':
+				this.next();
+				break;
+			case 'previous':
+				this.previous();
+				break;
+			case 'repeat':
+				this.repeat();
+				break;
+			case 'spell':
+				this.spell();
+				break;
+			case 'stop':
+				this.stop();
+				break;
+		}
+	}
+
+	private clickTarget(evt: MouseEvent): { view: MarkdownView; el: Element } | null {
+		const s = this.session;
+		if (!s || !this.host.settings.clickToJump || evt.button !== 0) return null;
+		if (evt.ctrlKey || evt.metaKey || evt.shiftKey || evt.altKey) return null;
+		const node = evt.targetNode;
+		const el = node?.instanceOf(Element) ? node : (node?.parentElement ?? null);
+		if (!el || el.closest(NO_JUMP_SELECTOR)) return null;
+		const view = this.markdownViewsFor(s.filePath).find((v) => v.containerEl.contains(el));
+		return view ? { view, el } : null;
+	}
+
+	private offsetAtPoint(view: MarkdownView, el: Element, x: number, y: number): number | null {
+		const settings = this.host.settings;
+		if (view.getMode() === 'preview') {
+			return this.renderedHighlighter.offsetAtPointInReadingView(view, el, x, y, view.getViewData(), settings);
+		}
+		const cm = this.editorHighlighter.viewsFor(view.file?.path ?? '').find((v) => v.dom.contains(el));
+		if (!cm) return null;
+		if (el.closest('.cm-embed-block')) {
+			return this.renderedHighlighter.offsetAtPointInEditorWidget(cm, el, x, y, settings);
+		}
+		if (!el.closest('.cm-content')) return null;
+		return cm.posAtCoords({ x, y });
+	}
+
+	private showControlBar(doc: Document): void {
+		this.controlBar.show(doc);
+		this.controlBar.setKeyHints(this.keyHints());
+	}
+
+	private keyHints(): Partial<Record<ReaderAction, string>> {
+		const settings = this.host.settings;
+		const hints: Partial<Record<ReaderAction, string>> = {};
+		if (!settings.readerKeysEnabled) return hints;
+		for (const action of READER_ACTIONS) {
+			const key = settings.readerKeys[action];
+			if (key) hints[action] = keyLabel(key);
+		}
+		return hints;
+	}
+
 	// -----------------------------------------------------------------------
 	// Workspace and vault events
 	// -----------------------------------------------------------------------
@@ -198,7 +348,9 @@ export class WordByWordController {
 		if (!this.host.settings.showControlBar) {
 			this.controlBar.hide();
 		} else if (!this.controlBar.isShown) {
-			this.controlBar.show(activeDocument);
+			this.showControlBar(activeDocument);
+		} else {
+			this.controlBar.setKeyHints(this.keyHints());
 		}
 		if (this.autoAdvanceState !== 'running') this.clearAutoAdvance();
 		if (retokenize) this.externalChangePending = true;
