@@ -2,8 +2,8 @@ import type { Extension } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 import { MarkdownView, Notice, TFile, type App, type MarkdownPostProcessor } from 'obsidian';
 import { ControlBar, type AutoAdvanceState } from './control-bar';
-import { EditorHighlighter, type Span } from './highlight/editor';
-import { ReadingHighlighter } from './highlight/reading';
+import { EditorHighlighter, HIGHLIGHT_CLASS, type Span } from './highlight/editor';
+import { offsetOfLine, RenderedHighlighter } from './highlight/rendered';
 import { ReadingSession } from './session';
 import type { SavedPosition, WordByWordSettings } from './settings';
 import type { SpeechEngine } from './speech';
@@ -33,13 +33,13 @@ export class WordByWordController {
 	private retokenizeTimer: number | null = null;
 
 	private readonly editorHighlighter: EditorHighlighter;
-	private readonly readingHighlighter: ReadingHighlighter;
+	private readonly renderedHighlighter: RenderedHighlighter;
 	private readonly controlBar: ControlBar;
 	private readonly styledBodies = new Set<HTMLElement>();
 
 	constructor(private readonly host: ControllerHost) {
 		this.editorHighlighter = new EditorHighlighter((view, path) => this.onEditorChanged(view, path));
-		this.readingHighlighter = new ReadingHighlighter(() => this.queueRender(false));
+		this.renderedHighlighter = new RenderedHighlighter(() => this.queueRender(false));
 		this.controlBar = new ControlBar({
 			previous: () => this.previous(),
 			repeat: () => this.repeat(),
@@ -55,7 +55,7 @@ export class WordByWordController {
 	}
 
 	get postProcessor(): MarkdownPostProcessor {
-		return this.readingHighlighter.postProcessor;
+		return this.renderedHighlighter.postProcessor;
 	}
 
 	get isActive(): boolean {
@@ -178,7 +178,7 @@ export class WordByWordController {
 		this.changedEditor = null;
 		this.externalChangePending = false;
 		this.editorHighlighter.clearAll();
-		this.readingHighlighter.clearAll();
+		this.renderedHighlighter.clearAll();
 		this.controlBar.hide();
 	}
 
@@ -359,11 +359,34 @@ export class WordByWordController {
 
 		this.editorHighlighter.show(s.filePath, { highlight, anchor: s.currentOffset, scope: s.scope }, scroll);
 
-		for (const view of this.markdownViewsFor(s.filePath)) {
-			if (view.getMode() !== 'preview') continue;
-			const word = token ? (token.kind === 'word' ? token : s.currentWord) : undefined;
-			this.readingHighlighter.show(view, view.getViewData(), word, this.host.settings, scroll);
+		// Words inside blocks that Live Preview draws as widgets (callouts,
+		// tables) and words in reading view are highlighted in the rendered HTML.
+		const ranges: Range[] = [];
+		if (target) {
+			for (const cm of this.editorHighlighter.viewsFor(s.filePath)) {
+				if (cm.dom.getClientRects().length === 0) continue; // Hidden (e.g. in reading view).
+				if (cm.contentDOM.querySelector(`.${HIGHLIGHT_CLASS}`)) continue; // Decoration is visible.
+				const range = this.renderedHighlighter.rangeInEditorWidget(cm, target, this.host.settings);
+				if (range) ranges.push(range);
+			}
 		}
+		const word = token ? (token.kind === 'word' ? token : s.currentWord) : undefined;
+		if (word) {
+			for (const view of this.markdownViewsFor(s.filePath)) {
+				if (view.getMode() !== 'preview') continue;
+				const range = this.renderedHighlighter.rangeInReadingView(
+					view,
+					view.getViewData(),
+					word,
+					this.host.settings,
+					scroll,
+				);
+				if (range) ranges.push(range);
+			}
+		}
+		this.renderedHighlighter.apply(ranges);
+		// Scrolling can bring new lines and widgets into the DOM; look again once it settles.
+		if (scroll) this.queueRender(false);
 
 		this.controlBar.update({
 			word: token?.display ?? '',
@@ -404,12 +427,3 @@ export class WordByWordController {
 	}
 }
 
-function offsetOfLine(text: string, line: number): number {
-	let offset = 0;
-	for (let l = 0; l < line; l++) {
-		const next = text.indexOf('\n', offset);
-		if (next < 0) return text.length;
-		offset = next + 1;
-	}
-	return offset;
-}

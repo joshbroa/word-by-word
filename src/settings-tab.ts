@@ -251,27 +251,50 @@ export class WordByWordSettingTab extends PluginSettingTab {
 			name,
 			desc,
 			render: (setting) => {
-				let slider: SliderComponent | null = null;
-				setting.addSlider((s) => {
-					slider = s;
-					s.setLimits(min, max, step)
+				// Obsidian 1.13+ shows slider values itself; older versions need a readout.
+				const readout = requireApiVersion('1.13.0')
+					? null
+					: createSpan({ cls: 'word-by-word-slider-value', text: formatValue(key, this.settings[key]) });
+				const sliders: SliderComponent[] = [];
+				setting.addSlider((slider) => {
+					sliders.push(slider);
+					slider
+						.setLimits(min, max, step)
 						.setValue(this.settings[key])
 						.onChange(async (value) => {
 							this.settings[key] = value;
 							await this.plugin.saveSettings();
 						});
+					slider.sliderEl.addEventListener('input', () => {
+						readout?.setText(formatValue(key, slider.getValue()));
+					});
 				});
+				if (readout) setting.controlEl.prepend(readout);
 				setting.addExtraButton((button) =>
 					button
 						.setIcon('rotate-ccw')
 						.setTooltip('Restore default')
 						.onClick(async () => {
 							this.settings[key] = DEFAULT_SETTINGS[key];
-							slider?.setValue(DEFAULT_SETTINGS[key]);
+							for (const slider of sliders) slider.setValue(DEFAULT_SETTINGS[key]);
+							readout?.setText(formatValue(key, DEFAULT_SETTINGS[key]));
 							await this.plugin.saveSettings();
 						}),
 				);
 			},
 		};
+	}
+}
+
+function formatValue(key: NumericKey, value: number): string {
+	switch (key) {
+		case 'autoAdvanceSeconds':
+			return value === 0 ? 'Off' : `${value} s`;
+		case 'rate':
+			return `${value.toFixed(2)}×`;
+		case 'volume':
+			return `${Math.round(value * 100)}%`;
+		default:
+			return value.toFixed(1);
 	}
 }

@@ -83,6 +83,21 @@ body {
 	display: none;
 }
 
+/* Room below the last line so the bar never covers it. */
+body.word-by-word-bar-visible .markdown-source-view.mod-cm6 .cm-sizer,
+body.word-by-word-bar-visible .markdown-preview-view .markdown-preview-sizer {
+	padding-bottom: 160px;
+}
+
+/* Slider value readout (Obsidian versions before 1.13 do not show one). */
+.word-by-word-slider-value {
+	min-width: 3.5em;
+	text-align: right;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	font-variant-numeric: tabular-nums;
+}
+
 /* Bigger touch targets on phones and tablets. */
 .is-mobile .word-by-word-bar {
 	bottom: calc(var(--mobile-toolbar-height, 48px) + var(--size-4-4, 16px) + env(safe-area-inset-bottom, 0px));

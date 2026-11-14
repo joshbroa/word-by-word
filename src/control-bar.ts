@@ -9,6 +9,9 @@ export interface ControlBarActions {
 	stop(): void;
 }
 
+/** Also read by highlight/editor.ts to keep the current word clear of the bar. */
+const BODY_CLASS = 'word-by-word-bar-visible';
+
 export type AutoAdvanceState = 'off' | 'running' | 'paused';
 
 export interface ControlBarState {
@@ -31,6 +34,7 @@ export class ControlBar {
 	private wordEl: HTMLElement | null = null;
 	private positionEl: HTMLElement | null = null;
 	private autoButton: HTMLButtonElement | null = null;
+	private body: HTMLElement | null = null;
 
 	constructor(private readonly actions: ControlBarActions) {}
 
@@ -58,6 +62,9 @@ export class ControlBar {
 		this.autoButton = this.button(buttons, 'pause', 'Pause auto-advance', () => this.actions.toggleAutoAdvance());
 		this.button(buttons, 'x', 'Stop', () => this.actions.stop());
 		this.root = root;
+		// Lets the stylesheet add room at the bottom of notes so the bar never covers the last lines.
+		this.body = doc.body;
+		this.body.addClass(BODY_CLASS);
 	}
 
 	update(state: ControlBarState): void {
@@ -77,6 +84,8 @@ export class ControlBar {
 
 	hide(): void {
 		this.root?.remove();
+		this.body?.removeClass(BODY_CLASS);
+		this.body = null;
 		this.root = null;
 		this.wordEl = null;
 		this.positionEl = null;

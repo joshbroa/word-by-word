@@ -1,14 +1,16 @@
+import type { EditorView } from '@codemirror/view';
 import type { MarkdownPostProcessorContext, MarkdownView } from 'obsidian';
 import { maskMarkdown, type Token, type TokenizeOptions } from '../tokenizer';
 
 /** Name used with `CSS.highlights`; styled by `::highlight(word-by-word-current)`. */
-export const READING_HIGHLIGHT_NAME = 'word-by-word-current';
+export const RENDERED_HIGHLIGHT_NAME = 'word-by-word-current';
 
 /** Rendered elements whose text does not come from the note's own words. */
 const ALWAYS_SKIP = [
 	'.frontmatter',
 	'.metadata-container',
 	'.callout-icon',
+	'.callout-fold',
 	'.internal-embed',
 	'.footnote-backref',
 	'sup.footnote-ref',
@@ -16,6 +18,7 @@ const ALWAYS_SKIP = [
 	'.collapse-indicator',
 	'.list-bullet',
 	'.copy-code-button',
+	'.edit-block-button',
 	'.math',
 ].join(', ');
 
@@ -25,22 +28,18 @@ interface HighlightWindow extends Window {
 	CSS?: { highlights?: HighlightRegistry };
 }
 
-interface SectionMatch {
-	el: HTMLElement;
-	lineStart: number;
-}
-
 /**
- * Highlights the current word in reading view.
+ * Highlights the current word in rendered markdown: reading view, and
+ * blocks that Live Preview draws as widgets (callouts, tables), where
+ * CodeMirror decorations are not visible.
  *
- * Reading view is rendered HTML, so there is no direct link from a character
- * offset to a DOM position. We find the rendered section that contains the
- * word's line (via the post-processor context), count how many times the
- * word appears earlier in that section of the source, and highlight the same
- * occurrence in the rendered text. The page itself is never modified: the
- * highlight is drawn with the CSS Custom Highlight API.
+ * Rendered HTML has no direct link back to character offsets. We find the
+ * rendered block that contains the word, count how many times the word
+ * appears earlier in that block's source, and pick the same occurrence in the
+ * rendered text. The page is never modified: the highlight is drawn with the
+ * CSS Custom Highlight API.
  */
-export class ReadingHighlighter {
+export class RenderedHighlighter {
 	private readonly contexts = new WeakMap<HTMLElement, MarkdownPostProcessorContext>();
 	private readonly rerendered = new WeakSet<MarkdownView>();
 	private readonly windows = new Set<Window>();
@@ -54,29 +53,20 @@ export class ReadingHighlighter {
 		this.onSectionRendered();
 	};
 
-	/** True if this device supports the CSS Custom Highlight API. */
-	static isSupported(win: Window): boolean {
-		return highlightRegistry(win) !== null;
-	}
-
 	/**
-	 * Highlight `word` in a reading-view `view` of the note whose text is `source`.
-	 * Pass undefined to clear the highlight in that window.
+	 * Find `word` in a reading-view `view` of the note whose text is `source`.
+	 * May scroll the view so that the section is rendered.
 	 */
-	show(view: MarkdownView, source: string, word: Token | undefined, options: TokenizeOptions, scroll: boolean): void {
-		const win = view.containerEl.win;
-		const registry = highlightRegistry(win);
-		if (!registry) return;
-		this.windows.add(win);
-		if (!word) {
-			registry.delete(READING_HIGHLIGHT_NAME);
-			return;
-		}
-
+	rangeInReadingView(
+		view: MarkdownView,
+		source: string,
+		word: Token,
+		options: TokenizeOptions,
+		scroll: boolean,
+	): Range | null {
 		const line = lineOf(source, word.start);
 		const section = this.findSection(view, line);
 		if (!section) {
-			registry.delete(READING_HIGHLIGHT_NAME);
 			if (!this.rerendered.has(view)) {
 				// Sections rendered before the plugin loaded have no context yet.
 				this.rerendered.add(view);
@@ -85,29 +75,65 @@ export class ReadingHighlighter {
 			// The section may not be rendered yet; scrolling to it renders it,
 			// and the post-processor then triggers another attempt.
 			if (scroll) view.previewMode.applyScroll(line);
-			return;
+			return null;
 		}
+		const range = this.findRange(section.el, source, offsetOfLine(source, section.lineStart), word, options);
+		if (scroll) scrollIntoView(section.el, range ? range.getBoundingClientRect() : section.el.getBoundingClientRect());
+		return range;
+	}
 
-		const range = this.findRange(section, source, word, options);
-		if (!range) {
-			registry.delete(READING_HIGHLIGHT_NAME);
-			if (scroll) scrollIntoView(section.el, section.el.getBoundingClientRect());
-			return;
+	/**
+	 * If `word` is inside a block that Live Preview renders as a widget (such
+	 * as a callout or table), find it in the widget's rendered text.
+	 */
+	rangeInEditorWidget(cm: EditorView, word: Token, options: TokenizeOptions): Range | null {
+		const source = cm.state.doc.toString();
+		for (const el of Array.from(cm.contentDOM.querySelectorAll<HTMLElement>(':scope > .cm-embed-block'))) {
+			let start: number;
+			let end: number;
+			try {
+				start = cm.posAtDOM(el);
+				const next = el.nextElementSibling;
+				end = next ? cm.posAtDOM(next) : cm.state.doc.length;
+			} catch {
+				continue;
+			}
+			if (word.start >= start && word.start < end) {
+				return this.findRange(el, source, start, word, options);
+			}
 		}
-		const HighlightCtor = (win as HighlightWindow).Highlight;
-		if (!HighlightCtor) return;
-		registry.set(READING_HIGHLIGHT_NAME, new HighlightCtor(range));
-		if (scroll) scrollIntoView(section.el, range.getBoundingClientRect());
+		return null;
+	}
+
+	/** Show exactly these ranges, replacing any previous highlight in every window. */
+	apply(ranges: readonly Range[]): void {
+		const byWindow = new Map<Window, Range[]>();
+		for (const range of ranges) {
+			const win = range.startContainer.win;
+			const list = byWindow.get(win) ?? [];
+			list.push(range);
+			byWindow.set(win, list);
+		}
+		for (const win of this.windows) {
+			if (!byWindow.has(win)) highlightRegistry(win)?.delete(RENDERED_HIGHLIGHT_NAME);
+		}
+		this.windows.clear();
+		for (const [win, list] of byWindow) {
+			const registry = highlightRegistry(win);
+			const HighlightCtor = (win as HighlightWindow).Highlight;
+			if (!registry || !HighlightCtor) continue;
+			registry.set(RENDERED_HIGHLIGHT_NAME, new HighlightCtor(...list));
+			this.windows.add(win);
+		}
 	}
 
 	/** Remove the highlight from every window. */
 	clearAll(): void {
-		for (const win of this.windows) highlightRegistry(win)?.delete(READING_HIGHLIGHT_NAME);
-		this.windows.clear();
+		this.apply([]);
 		this.maskCache = null;
 	}
 
-	private findSection(view: MarkdownView, line: number): SectionMatch | null {
+	private findSection(view: MarkdownView, line: number): { el: HTMLElement; lineStart: number } | null {
 		const sections = view.previewMode.containerEl.querySelectorAll<HTMLElement>('.markdown-preview-section > div');
 		for (const el of Array.from(sections)) {
 			const info = this.contexts.get(el)?.getSectionInfo(el);
@@ -118,28 +144,33 @@ export class ReadingHighlighter {
 		return null;
 	}
 
-	private findRange(section: SectionMatch, source: string, word: Token, options: TokenizeOptions): Range | null {
+	private findRange(
+		el: HTMLElement,
+		source: string,
+		blockStart: number,
+		word: Token,
+		options: TokenizeOptions,
+	): Range | null {
 		const needle = coreOf(word.display);
 		if (!needle) return null;
 
-		// How many times does the word appear earlier in this section's visible text?
+		// How many times does the word appear earlier in this block's visible text?
 		const hidden = this.mask(source, options);
-		const sectionStart = offsetOfLine(source, section.lineStart);
 		const visibleBefore: string[] = [];
-		for (let i = sectionStart; i < word.start && i < source.length; i++) {
+		for (let i = blockStart; i < word.start && i < source.length; i++) {
 			if (hidden[i] !== 1) visibleBefore.push(source[i] ?? '');
 		}
 		const occurrence = findOccurrences(visibleBefore.join(''), needle).length;
 
-		// Find the same occurrence in the rendered text.
-		const { text, nodes } = collectText(section.el, options.skipCodeBlocks);
+		// Pick the same occurrence in the rendered text.
+		const { text, nodes } = collectText(el, options.skipCodeBlocks);
 		const matches = findOccurrences(text, needle);
 		const start = matches[Math.min(occurrence, matches.length - 1)];
 		if (start === undefined) return null;
 		const startPos = locate(nodes, start);
 		const endPos = locate(nodes, start + needle.length, true);
 		if (!startPos || !endPos) return null;
-		const range = section.el.doc.createRange();
+		const range = el.doc.createRange();
 		range.setStart(startPos.node, startPos.offset);
 		range.setEnd(endPos.node, endPos.offset);
 		return range;
@@ -223,7 +254,7 @@ function lineOf(source: string, offset: number): number {
 	return line;
 }
 
-function offsetOfLine(source: string, line: number): number {
+export function offsetOfLine(source: string, line: number): number {
 	let offset = 0;
 	for (let l = 0; l < line; l++) {
 		const next = source.indexOf('\n', offset);
@@ -237,7 +268,7 @@ function scrollIntoView(el: HTMLElement, rect: DOMRect): void {
 	const scroller = el.closest<HTMLElement>('.markdown-preview-view');
 	if (!scroller) return;
 	const bounds = scroller.getBoundingClientRect();
-	const margin = Math.min(96, bounds.height / 4);
+	const margin = Math.min(160, bounds.height / 4);
 	if (rect.top < bounds.top + margin || rect.bottom > bounds.bottom - margin) {
 		scroller.scrollTop += rect.top - bounds.top - bounds.height / 3;
 	}

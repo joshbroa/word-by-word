@@ -23,6 +23,17 @@ export interface EditorMarks {
 
 export const HIGHLIGHT_CLASS = 'word-by-word-current';
 
+/** Body class set while the floating control bar is visible (see control-bar.ts). */
+const BAR_VISIBLE_CLASS = 'word-by-word-bar-visible';
+
+/**
+ * Tell CodeMirror that the bottom of the editor is covered by the floating
+ * control bar, so scrolling keeps the current word clear of it.
+ */
+const barScrollMargin = EditorView.scrollMargins.of((view) =>
+	view.dom.doc.body.hasClass(BAR_VISIBLE_CLASS) ? { bottom: 140 } : null,
+);
+
 const setMarks = StateEffect.define<EditorMarks | null>();
 
 const currentMark = Decoration.mark({ class: HIGHLIGHT_CLASS });
@@ -99,7 +110,7 @@ export class EditorHighlighter {
 				},
 			};
 		});
-		return [marksField, tracker];
+		return [marksField, tracker, barScrollMargin];
 	}
 
 	viewsFor(path: string): EditorView[] {
@@ -111,7 +122,7 @@ export class EditorHighlighter {
 		for (const view of this.viewsFor(path)) {
 			const effects: StateEffect<unknown>[] = [setMarks.of(marks)];
 			if (scroll && marks.highlight && view.dom.isConnected) {
-				effects.push(EditorView.scrollIntoView(marks.highlight.from, { y: 'nearest', yMargin: 96 }));
+				effects.push(EditorView.scrollIntoView(marks.highlight.from, { y: 'nearest', yMargin: 48 }));
 			}
 			safeDispatch(view, effects);
 		}
