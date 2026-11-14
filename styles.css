@@ -1,0 +1,100 @@
+/* Word by Word */
+
+body {
+	--word-by-word-highlight: #ffb703;
+}
+
+/* ---- Current-word highlight ------------------------------------------- */
+
+/* Editing view (CodeMirror decoration). */
+.markdown-source-view .word-by-word-current {
+	background-color: color-mix(in srgb, var(--word-by-word-highlight) 45%, transparent);
+	box-shadow: 0 0 0 2px var(--word-by-word-highlight);
+	border-radius: 2px;
+}
+
+/* Reading view (CSS Custom Highlight API: no DOM changes). */
+::highlight(word-by-word-current) {
+	background-color: color-mix(in srgb, var(--word-by-word-highlight) 55%, transparent);
+}
+
+/* ---- Control bar --------------------------------------------------------- */
+
+.word-by-word-bar {
+	position: fixed;
+	left: 50%;
+	bottom: calc(var(--size-4-12, 48px) + env(safe-area-inset-bottom, 0px));
+	transform: translateX(-50%);
+	z-index: var(--layer-status-bar, 15);
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-3, 12px);
+	max-width: calc(100vw - 2 * var(--size-4-4, 16px));
+	padding: var(--size-4-2, 8px) var(--size-4-3, 12px);
+	background-color: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-l, 12px);
+	box-shadow: var(--shadow-s);
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+	user-select: none;
+}
+
+.word-by-word-readout {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	min-width: 7em;
+	max-width: 16em;
+}
+
+.word-by-word-word {
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--font-ui-large);
+	font-weight: var(--font-semibold);
+	line-height: 1.3;
+}
+
+.word-by-word-word.is-finished {
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+.word-by-word-position {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.word-by-word-buttons {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-1, 2px);
+}
+
+.word-by-word-button.word-by-word-next {
+	color: var(--interactive-accent);
+}
+
+.word-by-word-hidden {
+	display: none;
+}
+
+/* Bigger touch targets on phones and tablets. */
+.is-mobile .word-by-word-bar {
+	bottom: calc(var(--mobile-toolbar-height, 48px) + var(--size-4-4, 16px) + env(safe-area-inset-bottom, 0px));
+	flex-wrap: wrap;
+	justify-content: center;
+}
+
+.is-mobile .word-by-word-button {
+	padding: var(--size-4-2, 8px);
+}
+
+.is-mobile .word-by-word-button .svg-icon {
+	width: var(--icon-l, 24px);
+	height: var(--icon-l, 24px);
+}
