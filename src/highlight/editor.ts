@@ -144,8 +144,7 @@ export class EditorHighlighter {
 function safeDispatch(view: EditorView, effects: StateEffect<unknown>[]): void {
 	try {
 		view.dispatch({ effects });
-	} catch (e) {
-		// The view may have been destroyed between lookup and dispatch.
-		console.debug('Word by Word: could not update editor', e);
+	} catch {
+		// The view was destroyed between lookup and dispatch; nothing to update.
 	}
 }

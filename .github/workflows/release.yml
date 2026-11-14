@@ -1,0 +1,60 @@
+name: Release Obsidian plugin
+
+# Push a tag that exactly matches the version in manifest.json (no "v" prefix),
+# e.g. by running `npm version 0.2.0 && git push --follow-tags`. This builds the
+# plugin and creates a draft release with the three files Obsidian's community
+# plugin directory expects: main.js, manifest.json and styles.css.
+
+on:
+    push:
+        tags:
+            - '*'
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            id-token: write
+            attestations: write
+        steps:
+            - uses: actions/checkout@v6
+
+            - name: Use Node.js
+              uses: actions/setup-node@v6
+              with:
+                  node-version: 24
+                  cache: 'npm'
+
+            - name: Install, test and build
+              run: |
+                  npm ci
+                  npm test
+                  npm run build
+
+            - name: Check the tag matches manifest.json
+              run: |
+                  tag="${GITHUB_REF#refs/tags/}"
+                  version=$(node -p "require('./manifest.json').version")
+                  if [ "$tag" != "$version" ]; then
+                    echo "::error::Tag $tag does not match manifest.json version $version"
+                    exit 1
+                  fi
+
+            - name: Attest build provenance
+              uses: actions/attest@v4
+              with:
+                  subject-path: |
+                      main.js
+                      styles.css
+
+            - name: Create draft release
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  tag="${GITHUB_REF#refs/tags/}"
+                  gh release create "$tag" \
+                    --title="$tag" \
+                    --draft \
+                    --notes "See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md) for details." \
+                    main.js manifest.json styles.css

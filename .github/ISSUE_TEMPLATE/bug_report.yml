@@ -1,0 +1,70 @@
+name: Bug report
+description: Something isn't working as expected.
+labels: [bug]
+body:
+    - type: markdown
+      attributes:
+          value: Thanks for taking the time to report a problem.
+    - type: textarea
+      id: what-happened
+      attributes:
+          label: What happened?
+          description: What did you expect, and what happened instead?
+      validations:
+          required: true
+    - type: textarea
+      id: steps
+      attributes:
+          label: Steps to reproduce
+          placeholder: |
+              1. Open a note containing ...
+              2. Run "Start from cursor"
+              3. Press "Next word" ...
+      validations:
+          required: true
+    - type: textarea
+      id: markdown
+      attributes:
+          label: Sample markdown
+          description: A short piece of markdown that shows the problem, if it's about what gets read or highlighted. Please remove anything private.
+          render: markdown
+    - type: dropdown
+      id: view
+      attributes:
+          label: Which view?
+          multiple: true
+          options:
+              - Live Preview
+              - Source mode
+              - Reading view
+    - type: input
+      id: os
+      attributes:
+          label: Operating system and device
+          placeholder: e.g. Windows 11, macOS 15, Android 15 (Pixel 8), iOS 18 (iPad)
+      validations:
+          required: true
+    - type: input
+      id: obsidian-version
+      attributes:
+          label: Obsidian version
+          description: Settings → General → Current version.
+      validations:
+          required: true
+    - type: input
+      id: plugin-version
+      attributes:
+          label: Word by Word version
+      validations:
+          required: true
+    - type: input
+      id: voice
+      attributes:
+          label: Voice
+          description: The voice shown under Settings → Word by Word → Voice ("Currently using …").
+    - type: textarea
+      id: console
+      attributes:
+          label: Console errors
+          description: Optional. Open the developer console (Ctrl+Shift+I on Windows and Linux, Cmd+Option+I on macOS) and paste any red errors that mention Word by Word.
+          render: text
