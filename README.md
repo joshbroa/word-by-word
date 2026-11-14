@@ -7,10 +7,6 @@ I built it for copying journal entries from Obsidian into a paper notebook. Look
 It's useful any time you copy text by hand: journals, letters, lyrics, revision notes, or practising handwriting or a new script.
 
 ![Word by Word highlighting the current word in a note, with the control bar showing "walk," at position 56 of 59](docs/screenshot.png)
-
-<!-- TODO: replace with a short demo GIF (docs/demo.gif) showing a few presses of "Next word". -->
-> **Demo GIF coming soon.**
-
 ## Features
 
 - **Strictly one word per press.** Nothing is spoken until you ask for the next word. Pressing again mid-word cuts the old word off at once, so presses never queue up or overlap.
@@ -144,7 +140,7 @@ One step is one whitespace-separated word, with its punctuation still attached o
 | `> [!note] Title` | "Title" and the callout text |
 | `` `inline code` `` | "inline code" |
 | Fenced code blocks | Skipped (configurable) |
-| `<!-- comments -->`, `%% comments %%` | Nothing |
+| HTML comments, `%% comments %%` | Nothing |
 | `![[embeds]]`, `![images](…)` | Nothing |
 | Footnote markers, block IDs, HTML tags | Nothing |
 | `#tags` | The tag without the `#` |
