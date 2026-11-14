@@ -29,4 +29,10 @@ export default defineConfig(
 		},
 	},
 	...obsidianmd.configs.recommended,
+	{
+		rules: {
+			// "Cursor" is on the rule's brand list, but here it means the text cursor.
+			'obsidianmd/ui/sentence-case': ['warn', { ignoreRegex: ['^Start from cursor$'] }],
+		},
+	},
 );
